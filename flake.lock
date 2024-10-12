@@ -1,0 +1,44 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1612182191,
+        "narHash": "sha256-ydLjWuvYlFvpLWWEQiFEgeFFc1U0q/1z7Ky/Y6i+Cb4=",
+        "owner": "cleverca22",
+        "repo": "nixpkgs",
+        "rev": "f053612885d5d9f0a4648364a7094989f3e1594c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cleverca22",
+        "ref": "arm-multilib",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs2": {
+      "locked": {
+        "lastModified": 1728492678,
+        "narHash": "sha256-9UTxR8eukdg+XZeHgxW5hQA9fIKHsKCdOIUycTryeVw=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "5633bcff0c6162b9e4b5f1264264611e950c8ec7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "nixpkgs2": "nixpkgs2"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
