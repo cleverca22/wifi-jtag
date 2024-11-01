@@ -1,13 +1,17 @@
+#include "pico/stdlib.h"
+
+#ifdef RASPBERRYPI_PICO_W
 #include "lwip/tcp.h"
 #include "pico/cyw43_arch.h"
-#include "pico/multicore.h"
-#include "pico/stdlib.h"
-#include "tusb.h"
-
-#include "server.h"
 #include "socket.h"
 #include "websocket.h"
 #include "ws.h"
+#endif
+
+#include "pico/multicore.h"
+#include "tusb.h"
+
+#include "server.h"
 
 #define DEBUG_printf printf
 
@@ -16,16 +20,46 @@
 class ReplSocket;
 static void connect_callback();
 static void disconnect_callback();
-static void uart_worker_fun(async_context_t *context, struct async_work_on_timeout *timeout);
 static void core1_main();
+static void led_set(int val);
+static bool setup(void);
+static void uart_handler();
 
 ReplSocket *last_repl = NULL;
-async_context_t *async_ctx = NULL;
 
 //async_at_time_worker_t uart_worker = {
 //  .do_work = uart_worker_fun,
 //  .next_time = 0,
 //};
+
+#ifdef RASPBERRYPI_PICO_W
+//static void uart_worker_fun(async_context_t *context, struct async_work_on_timeout *timeout);
+static void server_init();
+
+async_context_t *async_ctx = NULL;
+
+static bool setup(void) {
+  if (cyw43_arch_init()) {
+    printf("failed to initialise\n");
+    return 1;
+  }
+
+  async_ctx = cyw43_arch_async_context();
+  cyw43_arch_enable_sta_mode();
+
+  printf("Connecting to Wi-Fi...\n");
+  if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+    printf("failed to connect.\n");
+    return false;
+  } else {
+    printf("Connected.\n");
+  }
+  u32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
+  printf("IP Address: %lu.%lu.%lu.%lu\n", ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
+
+  server_init();
+  return true;
+}
 
 class ReplSocket : public TcpSocket {
 public:
@@ -104,9 +138,20 @@ static void uart_handler() {
 static void led_set(int val) {
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, val);
 }
+#else
+static bool setup(void) {
+  gpio_set_dir(25, GPIO_OUT);
+}
+
+static void led_set(int val) {
+  gpio_put(25, val);
+}
+#endif
 
 int main() {
+#ifdef RASPBERRYPI_PICO_W
   disconnect_callback();
+#endif
   stdio_init_all();
 
   uart_init(uart0, 115200);
@@ -128,28 +173,9 @@ int main() {
   printf("\nusb host detected!\n");
 #endif
 
-  if (cyw43_arch_init()) {
-    printf("failed to initialise\n");
-    return 1;
-  }
+  if (!setup()) return 1;
 
-  async_ctx = cyw43_arch_async_context();
   multicore_launch_core1(core1_main);
-
-  cyw43_arch_enable_sta_mode();
-
-  printf("Connecting to Wi-Fi...\n");
-  if (cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
-    printf("failed to connect.\n");
-    return 1;
-  } else {
-    printf("Connected.\n");
-  }
-
-  u32_t ip_addr = cyw43_state.netif[CYW43_ITF_STA].ip_addr.addr;
-  printf("IP Address: %lu.%lu.%lu.%lu\n", ip_addr & 0xFF, (ip_addr >> 8) & 0xFF, (ip_addr >> 16) & 0xFF, ip_addr >> 24);
-
-  server_init();
 
   while (true) {
     led_set(1);
@@ -163,4 +189,7 @@ static void core1_main() {
   irq_set_exclusive_handler(UART0_IRQ, uart_handler);
   irq_set_enabled(UART0_IRQ, true);
   uart_set_irq_enables(uart0, true, false);
+  while (true) {
+    sleep_ms(1000);
+  }
 }
