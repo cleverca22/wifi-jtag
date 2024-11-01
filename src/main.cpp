@@ -41,7 +41,7 @@ async_context_t *async_ctx = NULL;
 static bool setup(void) {
   if (cyw43_arch_init()) {
     printf("failed to initialise\n");
-    return 1;
+    return false;
   }
 
   async_ctx = cyw43_arch_async_context();
@@ -141,6 +141,17 @@ static void led_set(int val) {
 #else
 static bool setup(void) {
   gpio_set_dir(25, GPIO_OUT);
+  return true;
+}
+
+static void uart_handler() {
+  char buffer[128];
+  int n=0;
+  while (uart_is_readable(uart0) && (n < 127)) {
+    buffer[n] = uart_get_hw(uart0)->dr;
+    n++;
+  }
+  buffer[n] = 0;
 }
 
 static void led_set(int val) {
