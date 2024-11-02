@@ -44,6 +44,8 @@ else()
   )
 endif()
 
+add_compile_options(-DPICO_ENTER_USB_BOOT_ON_EXIT)
+
 pico_add_extra_outputs(${PROJECT_NAME})
 
 pico_enable_stdio_usb(${PROJECT_NAME} 1)

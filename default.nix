@@ -9,6 +9,9 @@ stdenv.mkDerivation {
     echo cc is $CC
     type cmake
   '';
+  shellHook = ''
+    export NIX_LDFLAGS_arm_none_eabi="-L${pkgsCross.arm-embedded.stdenv.cc.libc}/arm-none-eabi/lib/thumb/v6-m/nofp $NIX_LDFLAGS_arm_none_eabi"
+  '';
   configurePhase = ''
     export NIX_LDFLAGS_arm_none_eabi="-L${pkgsCross.arm-embedded.stdenv.cc.libc}/arm-none-eabi/lib/thumb/v6-m/nofp $NIX_LDFLAGS_arm_none_eabi"
     mkdir build
