@@ -37,6 +37,7 @@ if (PICO_BOARD STREQUAL "pico_w")
 else()
   add_executable(${PROJECT_NAME}
     main.cpp
+    jtag.cpp
   )
   target_link_libraries(${PROJECT_NAME}
     pico_multicore

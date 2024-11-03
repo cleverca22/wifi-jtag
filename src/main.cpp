@@ -11,11 +11,18 @@
 #include "pico/multicore.h"
 #include "tusb.h"
 
+#define PIN_TMS  6
+#define PIN_TDI  7
+#define PIN_TCK  8
+#define PIN_TDO  9
+#define PIN_TRST 11
+
 #include "server.h"
+#include "jtag.h"
 
 #define DEBUG_printf printf
 
-#define RESET_PIN 2
+#define RESET_PIN 19
 
 class ReplSocket;
 static void connect_callback();
@@ -108,14 +115,7 @@ static void server_init() {
   server2.listen(1235);
 }
 
-static void connect_callback() {
-  gpio_set_dir(RESET_PIN, GPIO_IN);
-}
 
-static void disconnect_callback() {
-  gpio_set_dir(RESET_PIN, GPIO_OUT);
-  gpio_put(RESET_PIN, 0);
-}
 
 static void uart_handler() {
   char buffer[128];
@@ -139,8 +139,10 @@ static void led_set(int val) {
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, val);
 }
 #else
+
 static bool setup(void) {
-  gpio_set_dir(25, GPIO_OUT);
+  gpio_set_function(22, GPIO_FUNC_SIO);
+  gpio_set_dir(22, GPIO_OUT);
   return true;
 }
 
@@ -152,17 +154,25 @@ static void uart_handler() {
     n++;
   }
   buffer[n] = 0;
+  printf("%s", buffer);
 }
 
 static void led_set(int val) {
-  gpio_put(25, val);
+  gpio_put(22, val);
 }
 #endif
 
+static void connect_callback() {
+  gpio_set_dir(RESET_PIN, GPIO_IN);
+}
+
+static void disconnect_callback() {
+  gpio_set_dir(RESET_PIN, GPIO_OUT);
+  gpio_put(RESET_PIN, 0);
+}
+
 int main() {
-#ifdef RASPBERRYPI_PICO_W
-  disconnect_callback();
-#endif
+  //disconnect_callback();
   stdio_init_all();
 
   uart_init(uart0, 115200);
@@ -170,12 +180,14 @@ int main() {
   gpio_set_function(0, GPIO_FUNC_UART);
   gpio_set_function(1, GPIO_FUNC_UART);
 
-  gpio_set_function(RESET_PIN, GPIO_FUNC_SIO);
+  connect_callback();
   gpio_set_pulls(RESET_PIN, true, false);
+  gpio_set_function(RESET_PIN, GPIO_FUNC_SIO);
 
   //uart_putc_raw(uart0, 'A');
 
-#if 0
+#if 1
+  sleep_ms(500);
   while (!tud_cdc_connected()) {
     printf(".");
     //uart_puts(uart0, "hello\n");
@@ -183,8 +195,17 @@ int main() {
   }
   printf("\nusb host detected!\n");
 #endif
+  jtag_report();
+  sleep_ms(100);
+  connect_callback();
+  jtag_report();
 
   if (!setup()) return 1;
+
+  jtag_setup(PIN_TMS, PIN_TDI, PIN_TCK, PIN_TDO, PIN_TRST);
+  sleep_ms(100);
+  jtag_test();
+  sleep_ms(1000);
 
   multicore_launch_core1(core1_main);
 
