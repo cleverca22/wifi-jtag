@@ -2,10 +2,7 @@
 #include "pico/stdlib.h"
 #include <stdio.h>
 
-#define TMS 1
-#define TDI 2
-
-static int tms, tdi, tck, tdo, trst;
+int tms, tdi, tck, tdo, trst;
 static uint32_t gpio_old;
 static uint64_t tdo_history;
 
@@ -100,19 +97,17 @@ static void tck_pulse(void) {
   sleep_ms(1);
 }
 
-
-static void tck_shift(int flags) {
+void tck_shift(int flags) {
   if (flags & TMS) gpio_put(tms, 1);
   else gpio_put(tms, 0);
 
   if (flags & TDI) gpio_put(tdi, 1);
   else gpio_put(tdi, 0);
 
-  sleep_ms(1);
-  gpio_put(tck, 1);
-  sleep_ms(1);
+  busy_wait_us(1); // let TDI/TMS settle
+  gpio_put(tck, 1); // shift reg and state machine steps on rising edge
+  busy_wait_us(1); // wait for TDO to settle
   gpio_put(tck, 0);
-  sleep_ms(1);
 
   tdo_history = (tdo_history >> 1);
   if (gpio_get(tdo)) tdo_history |= 1ULL<<63;
@@ -122,7 +117,6 @@ uint64_t get_top_n_bits(int bits) {
   return tdo_history >> (64 - bits);
 }
 
-
 static uint64_t shift_data(uint64_t input, int bits) {
   uint64_t result = 0;
   for (int i=0; i<bits; i++) {
@@ -130,7 +124,7 @@ static uint64_t shift_data(uint64_t input, int bits) {
     if (input & 1) flag |= TDI;
 
     if (i == (bits-1)) {
-      flag |= TMS; // move to Exit1-IR
+      flag |= TMS; // move to Exit1
       result = get_top_n_bits(bits);
     }
 
@@ -142,7 +136,7 @@ static uint64_t shift_data(uint64_t input, int bits) {
   return result;
 }
 
-static void force_test_reset(void) {
+void force_test_reset(void) {
   for (int i=0; i<5; i++) {
     tck_shift(TMS);
   }
@@ -150,7 +144,7 @@ static void force_test_reset(void) {
 }
 
 static void setJtagState(jtag_state newstate) {
-  printf("switching from %s to %s\n", mode_names[currentState], mode_names[newstate]);
+  //printf("switching from %s to %s\n", mode_names[currentState], mode_names[newstate]);
   if ((currentState == testLogicReset) && (newstate == shiftIR)) {
     tck_shift(0);
     tck_shift(TMS);
@@ -178,37 +172,41 @@ static void setJtagState(jtag_state newstate) {
     tck_shift(TMS);
     tck_shift(0);
     tck_shift(0);
+    currentState = shiftIR;
+  } else if ((currentState == testLogicReset) && (newstate == shiftDR)) {
+    tck_shift(0);
+    tck_shift(TMS);
+    tck_shift(0);
+    tck_shift(0);
+    currentState = shiftDR;
   } else {
     printf("cant switch from %s to %s\n", mode_names[currentState], mode_names[newstate]);
   }
 }
 
-static uint64_t shift_ir(uint64_t cmd, int bits) {
+uint64_t shift_ir(uint64_t cmd, int bits) {
   setJtagState(shiftIR);
   uint64_t result = shift_data(cmd, bits);
   currentState = exit1IR;
   return result;
 }
 
-static uint64_t shift_dr(uint64_t data, int bits) {
+uint64_t shift_dr(uint64_t data, int bits) {
   setJtagState(shiftDR);
   uint64_t result = shift_data(data, bits);
   currentState = exit1DR;
   return result;
 }
 
-static void update_ir(void) {
+void update_ir(void) {
   setJtagState(updateIR);
 }
 
 void jtag_test(void) {
   uint64_t out = 0;
 
-  gpio_put(tms, 0);
-  gpio_put(tdi, 0);
-  gpio_put(tck, 0);
-
   force_test_reset(); // now in Test-Logic-Reset
+  puts("now in test-logic-reset");
 
   out = shift_ir(0b1110, 4);
 
@@ -239,7 +237,7 @@ static void report_change(uint32_t old, uint32_t newval, int pin, const char *na
 
 void jtag_report(void) {
   uint32_t gpio_new = gpio_get_all();
-  //report_change(gpio_old, gpio_new, tms, "TMS");
+  report_change(gpio_old, gpio_new, tms, "TMS");
   report_change(gpio_old, gpio_new, tdi, "TDI");
   report_change(gpio_old, gpio_new, tck, "TCK");
   report_change(gpio_old, gpio_new, tdo, "TDO");
