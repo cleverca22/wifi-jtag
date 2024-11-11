@@ -24,4 +24,5 @@ $ result/bin/openocd -f pi2.cfg
 the serial# line is optional, and is only needed if you have multiple wifi-jtag pico's attached at once
 
 in theory, it should work on any JTAG capable SBC, but its only been tested on raspberry pi's so far
+
 SWD mode is planned as well, that will enable targeting pico's and the pi5
