@@ -13,6 +13,7 @@
 #include "main.h"
 #include "pico/multicore.h"
 #include "tusb.h"
+#include "ws2812.pio.h"
 
 #define PIN_TMS  6
 #define PIN_TDI  7
@@ -30,6 +31,7 @@
 #define DEBUG_printf printf
 
 #define RESET_PIN 19
+// #define NEOPIXEL_PIN 23
 
 class ReplSocket;
 static void connect_callback();
@@ -53,7 +55,7 @@ static void server_init();
 
 async_context_t *async_ctx = NULL;
 
-static bool setup(void) {
+static bool wifi_setup(void) {
   if (cyw43_arch_init()) {
     printf("failed to initialise\n");
     return false;
@@ -128,20 +130,38 @@ void led_set(int val) {
 }
 #else
 
-static bool setup(void) {
-  gpio_set_function(PIN_LED, GPIO_FUNC_SIO);
-  gpio_set_dir(PIN_LED, GPIO_OUT);
-  connect_callback();
-  gpio_set_pulls(RESET_PIN, true, false);
-  gpio_set_function(RESET_PIN, GPIO_FUNC_SIO);
-  return true;
-}
 
 
 void led_set(int val) {
   gpio_put(PIN_LED, val);
 }
 #endif
+
+static bool setup(void) {
+#ifdef RASPBERRYPI_PICO_W
+  wifi_setup();
+#else
+  gpio_set_function(PIN_LED, GPIO_FUNC_SIO);
+  gpio_set_dir(PIN_LED, GPIO_OUT);
+#endif
+  disconnect_callback();
+
+  gpio_set_pulls(RESET_PIN, true, false);
+  gpio_set_function(RESET_PIN, GPIO_FUNC_SIO);
+
+#ifdef NEOPIXEL_PIN
+  PIO pio = pio0;
+  int sm = 0;
+  uint offset = pio_add_program(pio, &ws2812_program);
+
+  ws2812_program_init(pio, sm, offset, NEOPIXEL_PIN, 800000, false);
+
+  pio_sm_put_blocking(pio, sm, 0xff0000);
+#endif
+
+
+  return true;
+}
 
 void led_toggle() {
   static int flag;
@@ -176,7 +196,7 @@ static void uart_handler() {
   if (last_repl) {
     last_repl->write(buffer, n);
     tcp_output(last_repl->socket);
-    puts("sent packet");
+    //puts("sent packet");
   }
   async_context_release_lock(async_ctx);
 #endif
@@ -187,11 +207,13 @@ static void uart_handler() {
 
 static void connect_callback() {
   gpio_set_dir(RESET_PIN, GPIO_IN);
+  jtag_report();
 }
 
 static void disconnect_callback() {
   gpio_set_dir(RESET_PIN, GPIO_OUT);
   gpio_put(RESET_PIN, 0);
+  jtag_report();
 }
 
 int main() {
@@ -215,7 +237,7 @@ int main() {
 
   led_set(1);
 
-  connect_callback();
+  //connect_callback();
 
 #if 0
   sleep_ms(500);
@@ -242,6 +264,7 @@ int main() {
   while (true) {
     if (led_idle_blink) led_toggle();
     sleep_ms(1000);
+    jtag_report();
   }
 }
 
